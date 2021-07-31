@@ -15,7 +15,7 @@ fn get_store() -> Store {
     .unwrap()
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     let store = get_store();
 
