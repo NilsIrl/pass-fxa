@@ -683,6 +683,7 @@ dependencies = [
  "rand",
  "reqwest",
  "rsa",
+ "secstr",
  "serde",
  "serde_json",
  "serde_with",
@@ -758,9 +759,9 @@ dependencies = [
 
 [[package]]
 name = "prs-lib"
-version = "0.2.13"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88dfa0418efc6941117a5f6187c66a0b28b6b6a1fe4625d47e2b2a07a5af8919"
+checksum = "e38037096ed10c79fcc5b8800abeedad4909a20edb3942f8ffe324416244440b"
 dependencies = [
  "anyhow",
  "dirs-next",
@@ -981,6 +982,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cce2c726741c320e5b8f1edd9a21b3c2c292ae94514afd001d41d81ba143dafc"
 dependencies = [
  "libc",
+ "serde",
 ]
 
 [[package]]
@@ -1284,6 +1286,7 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

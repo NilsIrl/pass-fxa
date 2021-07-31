@@ -6,6 +6,7 @@ use hmac::{Hmac, Mac, NewMac};
 use rand::{rngs::OsRng, RngCore};
 use reqwest::{header, Request, StatusCode};
 use rsa::{hash::Hash, padding::PaddingScheme, PublicKeyParts, RSAPrivateKey};
+use secstr::SecUtf8;
 use serde::{de, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{self, Write};
@@ -22,12 +23,12 @@ struct CryptoKeyRecord {
 #[serde(rename_all = "camelCase")]
 pub struct Login {
     id: String,
-    pub hostname: String,
+    pub hostname: Url,
     #[serde(rename = "formSubmitURL")]
     form_submit_url: String,
     http_realm: Option<String>,
     pub username: String,
-    pub password: String,
+    pub password: SecUtf8,
     username_field: String,
     password_field: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -53,14 +54,14 @@ fn generate_bso_id() -> String {
 }
 
 impl Login {
-    pub fn new(username: &str, password: &str, hostname: &str) -> Self {
+    pub fn new(username: &str, password: &str, hostname: Url) -> Self {
         Self {
             id: generate_bso_id(),
-            hostname: format!("https://{}", hostname.to_string()),
+            hostname,
             form_submit_url: String::new(),
             http_realm: None,
             username: username.to_string(),
-            password: password.to_string(),
+            password: password.into(),
             username_field: String::new(),
             password_field: String::new(),
             time_created: None,
@@ -72,7 +73,7 @@ impl Login {
 
     pub fn with_password(&self, new_password: &str) -> Self {
         Self {
-            password: new_password.to_string(),
+            password: new_password.into(),
             ..self.clone()
         }
     }
@@ -617,6 +618,7 @@ impl SyncClient {
             .await
             .unwrap()
             .decrypt_payload(&self.key_bundle[0..32], &self.key_bundle[32..64]);
+        dbg!(std::str::from_utf8(&decrypted_payload).unwrap());
         serde_json::from_slice(&decrypted_payload).unwrap()
     }
     pub async fn new(email: &str, password: &str) -> Self {
