@@ -9,7 +9,6 @@ use rsa::{hash::Hash, padding::PaddingScheme, PublicKeyParts, RSAPrivateKey};
 use serde::{de, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{self, Write};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use url::Url;
 
 const DURATION: u64 = 60;
