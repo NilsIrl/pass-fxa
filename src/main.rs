@@ -1,5 +1,7 @@
-use prs_lib::{crypto::IsContext, Plaintext, Store};
-use std::{convert::TryFrom, env::VarError, path::Path};
+use log::debug;
+use prs_lib::{crypto::IsContext, Plaintext, Secret, Store};
+use std::{convert::TryFrom, env::VarError, path::Path, process::exit};
+use structopt::StructOpt;
 use url::Url;
 
 mod api;
@@ -24,14 +26,6 @@ impl TryFrom<&str> for Filter {
     }
 }
 
-impl Filter {
-    fn from_str(setting: &str) -> Self {
-        match setting {
-            _ => unimplemented!(),
-        }
-    }
-}
-
 #[derive(Clone)]
 struct LocalLogin {
     password: Plaintext,
@@ -41,8 +35,10 @@ struct LocalLogin {
 }
 
 impl LocalLogin {
-    fn new(prs_lib_plaintext: prs_lib::Secret, context: &mut prs_lib::crypto::Context) -> Self {
-        let plaintext = context.decrypt_file(&prs_lib_plaintext.path).unwrap();
+    fn new(prs_lib_plaintext: &Secret, context: &mut prs_lib::crypto::Context) -> Self {
+        let plaintext = context
+            .decrypt_file(&prs_lib_plaintext.path)
+            .expect("Failed to decrypt password file");
 
         // TODO: what to do if no password
         let password = plaintext.first_line().unwrap();
@@ -70,7 +66,8 @@ impl LocalLogin {
             Err(_) => name.file_name().unwrap().to_str().unwrap().to_string(),
         };
         let filter = plaintext.property("fxa").ok().map(|fxa_setting_plaintext| {
-            Filter::from_str(fxa_setting_plaintext.unsecure_to_str().unwrap())
+            Filter::try_from(fxa_setting_plaintext.unsecure_to_str().unwrap())
+                .expect("Unkown setting")
         });
         LocalLogin {
             password,
@@ -80,21 +77,26 @@ impl LocalLogin {
         }
     }
 
-    fn to_login(self, online_logins: &Vec<Login>) -> Login {
-        online_logins
-            .iter()
-            .find_map(|login| {
-                if login.username == self.username && login.hostname == self.url {
-                    Some(login.with_password(self.password.unsecure_to_str().unwrap()))
+    fn to_login(self, online_logins: &Vec<Login>) -> Option<Login> {
+        for online_login in online_logins {
+            if online_login.username == self.username && online_login.hostname == self.url {
+                if online_login.password.unsecure() == self.password.unsecure_to_str().unwrap() {
+                    // If the password is the same, leave unchanged
+                    return None;
                 } else {
-                    None
+                    // If the password is different, just change that
+                    return Some(
+                        online_login.with_password(self.password.unsecure_to_str().unwrap()),
+                    );
                 }
-            })
-            .unwrap_or(Login::new(
-                &self.username,
-                self.password.unsecure_to_str().unwrap(),
-                self.url,
-            ))
+            }
+        }
+        // Create new login if not in remote_logins
+        Some(Login::new(
+            &self.username,
+            self.password.unsecure_to_str().unwrap(),
+            self.url,
+        ))
     }
 }
 
@@ -107,53 +109,89 @@ fn get_store() -> Store {
     .unwrap()
 }
 
+#[derive(StructOpt)]
+struct Opt {
+    #[structopt(name = "pass-name")]
+    fxa_creds_name: Option<String>,
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let firefox_credentials;
-    let mut pass_context = prs_lib::crypto::context(prs_lib::crypto::PROTO).unwrap();
+    env_logger::init();
 
+    let opt = Opt::from_args();
+
+    let mut firefox_credentials = None;
+
+    // List of ambiguous matches
     let mut firefox_matches = Vec::new();
+
+    let mut pass_context = prs_lib::crypto::context(prs_lib::crypto::PROTO).unwrap();
+    let store = get_store();
+
     let mut local_logins = Vec::new();
     let mut include = false;
     let mut exclude = false;
-    for secret in get_store().secret_iter() {
-        let local_login = LocalLogin::new(secret, &mut pass_context);
+    for secret in store.secret_iter() {
+        let local_login = LocalLogin::new(&secret, &mut pass_context);
         if let Some(filter) = &local_login.filter {
             match filter {
                 Filter::Include => include = true,
-                Filter::Exclude => exclude = false,
+                Filter::Exclude => exclude = true,
             }
         }
+        let mut current_is_cred = false;
         if local_login.url.host_str().unwrap() == "firefox.com" {
-            firefox_matches.push(local_login.clone());
-            if let Some(Filter::Include) = local_login.filter {}
-            {
+            current_is_cred = true;
+            firefox_credentials = Some(local_login.clone());
+            firefox_matches.push((secret.name, local_login.username.clone()));
+        } else if let Some(ref fxa_creds_name) = opt.fxa_creds_name {
+            if *fxa_creds_name == secret.name {
+                current_is_cred = true;
+                firefox_credentials = Some(local_login.clone());
+            }
+        }
+        if current_is_cred {
+            if let Some(Filter::Include) = local_login.filter {
+            } else {
+                // The filter value is not include, so don't add it to local_logins by continuing
+                // the loop
                 continue;
             }
-        } else {
-            local_logins.push(local_login);
         }
+        local_logins.push(local_login);
     }
 
-    match firefox_matches.len() {
-        0 => panic!("Could not find Firefox Account credentials."),
-        1 => {
-            firefox_credentials = &firefox_matches[0];
+    match opt.fxa_creds_name {
+        Some(_) => {
+            if firefox_credentials.is_none() {
+                panic!("Could not find Firefox Account credentials.");
+            }
         }
-        // TODO implement --username to be able to select which to use
-        _ => panic!(
-            "Ambiguous Firefox Account credential locations: {:?}",
-            firefox_matches
-                .iter()
-                .map(|firefox_match| &firefox_match.username)
-                .collect::<Vec<_>>()
-        ),
+        None => {
+            match firefox_matches.len() {
+                0 => panic!("Could not find Firefox Account credentials."),
+                // Just use the value already in firefox_credentials
+                1 => (),
+                // TODO implement --username to be able to select which to use
+                _ => {
+                    eprintln!(
+                    "Ambiguous Firefox Account credential locations, please specify the location of the credentials:");
+                    for firefox_match in firefox_matches {
+                        eprintln!("- {}: {}", firefox_match.0, firefox_match.1);
+                    }
+                    exit(1);
+                }
+            }
+        }
     }
 
     if exclude && include {
         println!("Ambiguous settings, include & exclude both present.");
         return;
     }
+
+    let firefox_credentials = firefox_credentials.unwrap();
 
     let sync_client = SyncClient::new(
         &firefox_credentials.username,
@@ -163,38 +201,22 @@ async fn main() {
 
     let remote_logins = sync_client.get_logins().await;
 
-    dbg!(&remote_logins);
+    debug!("{:?}", remote_logins);
 
     let logins_to_upload: Vec<_> = if exclude || include {
         local_logins
             .into_iter()
             .filter(|login| include == login.filter.is_some())
-            .map(|local_login| local_login.to_login(&remote_logins))
+            .filter_map(|local_login| local_login.to_login(&remote_logins))
             .collect()
     } else {
         local_logins
             .into_iter()
-            .map(|local_login| local_login.to_login(&remote_logins))
+            .filter_map(|local_login| local_login.to_login(&remote_logins))
             .collect()
     };
 
     println!("Uploading {} passwords.", logins_to_upload.len());
+    debug!("Passwords to upload: {:?}", logins_to_upload);
     sync_client.put_logins(&logins_to_upload).await;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn list_store_test() {
-        let store = get_store();
-        for secret in store.secret_iter() {
-            let path = Path::new(&secret.name);
-            if let Some(containing_folder) = path.parent().map(|parent| parent.file_name()) {
-                dbg!(path.file_name(), containing_folder);
-            }
-        }
-        panic!();
-    }
 }

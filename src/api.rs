@@ -33,8 +33,10 @@ pub struct Login {
     password_field: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     time_last_used: Option<u64>,
+    // TODO: update this
     #[serde(skip_serializing_if = "Option::is_none")]
     time_created: Option<u64>,
+    // TODO: update this
     #[serde(skip_serializing_if = "Option::is_none")]
     time_password_changed: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -190,6 +192,7 @@ pub struct AccountLoginResponse {
     uid: String,
     pub session_token: String,
     pub key_fetch_token: String,
+    verification_method: Option<String>,
     verified: bool,
 }
 
@@ -280,6 +283,8 @@ impl FxaClient {
         Self {
             client: reqwest::Client::builder()
                 .user_agent("reqwest (pass-fxa)")
+                //.proxy(reqwest::Proxy::all("http://localhost:8080").unwrap())
+                //.danger_accept_invalid_certs(true)
                 .build()
                 .unwrap(),
             // TODO: allow user to choose FxA server
@@ -344,6 +349,14 @@ impl FxaClient {
                 }
             }
         };
+
+        if let Some(ref verification_method) = account_login_response.verification_method {
+            match verification_method.as_str() {
+                "email" => println!("Please confirm sign-in by email at {}", email),
+                _ => unimplemented!(),
+            }
+        }
+
         let mut derived_key_fetch_token = [0u8; 96];
         Hkdf::<Sha256>::new(
             None,
@@ -361,7 +374,17 @@ impl FxaClient {
             key: hawk::Key::new(req_hmac_key, hawk::DigestAlgorithm::Sha256).unwrap(),
         };
 
-        let bundle = hex::decode(self.account_keys(&hawk_credentials).await.bundle).unwrap();
+        let bundle = hex::decode(loop {
+            match self.account_keys(&hawk_credentials).await {
+                Ok(account_keys) => break account_keys.bundle,
+                Err(_) => {
+                    if account_login_response.verification_method.is_none() {
+                        unimplemented!()
+                    }
+                }
+            }
+        })
+        .unwrap();
         let ciphertext = &bundle[0..64];
         let mac = &bundle[64..96];
 
@@ -456,20 +479,17 @@ impl FxaClient {
         }
     }
 
-    pub async fn account_keys(&self, credentials: &hawk::Credentials) -> AccountKeysResponse {
+    pub async fn account_keys(
+        &self,
+        credentials: &hawk::Credentials,
+    ) -> Result<AccountKeysResponse, reqwest::Error> {
         let mut request = self
             .client
             .get(format!("{}/account/keys", self.base_uri))
             .build()
             .unwrap();
         hawk_authenticate(&mut request, credentials);
-        self.client
-            .execute(request)
-            .await
-            .unwrap()
-            .json()
-            .await
-            .unwrap()
+        self.client.execute(request).await.unwrap().json().await
     }
 
     pub async fn certificate_sign(
@@ -618,7 +638,6 @@ impl SyncClient {
             .await
             .unwrap()
             .decrypt_payload(&self.key_bundle[0..32], &self.key_bundle[32..64]);
-        dbg!(std::str::from_utf8(&decrypted_payload).unwrap());
         serde_json::from_slice(&decrypted_payload).unwrap()
     }
     pub async fn new(email: &str, password: &str) -> Self {
