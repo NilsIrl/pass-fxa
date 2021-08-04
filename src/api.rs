@@ -10,6 +10,7 @@ use secstr::SecUtf8;
 use serde::{de, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{self, Write};
+use tokio::time::{sleep, Duration};
 use url::Url;
 
 const DURATION: u64 = 60;
@@ -380,6 +381,8 @@ impl FxaClient {
                 Err(_) => {
                     if account_login_response.verification_method.is_none() {
                         unimplemented!()
+                    } else {
+                        sleep(Duration::from_millis(500)).await
                     }
                 }
             }
