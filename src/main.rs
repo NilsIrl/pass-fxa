@@ -35,7 +35,7 @@ struct LocalLogin {
 }
 
 impl LocalLogin {
-    fn new(prs_lib_plaintext: &Secret, context: &mut prs_lib::crypto::Context) -> Self {
+    fn new(prs_lib_plaintext: &Secret, context: &mut prs_lib::crypto::Context) -> Option<Self> {
         let plaintext = context
             .decrypt_file(&prs_lib_plaintext.path)
             .expect("Failed to decrypt password file");
@@ -45,36 +45,30 @@ impl LocalLogin {
 
         // This is fine to perform as it costs nothing to create a Path
         let name = Path::new(&prs_lib_plaintext.name);
-        let url = plaintext.property("url").map_or_else(
-            |_| {
-                Url::parse(&format!(
-                    "https://{}",
-                    name.parent()
-                        .unwrap()
-                        .file_name()
-                        .unwrap()
-                        .to_str()
-                        .unwrap(),
-                ))
-                .unwrap()
-            },
-            |url_plaintext| Url::parse(url_plaintext.unsecure_to_str().unwrap()).unwrap(),
-        );
+        let url = match plaintext.property("url") {
+            Err(_) => Url::parse(&format!(
+                "https://{}",
+                name.parent().unwrap().file_name()?.to_str().unwrap(),
+            ))
+            .unwrap(),
+            Ok(url_plaintext) => Url::parse(url_plaintext.unsecure_to_str().unwrap()).unwrap(),
+        };
 
         let username = match plaintext.property("login") {
             Ok(login_plaintext) => login_plaintext.unsecure_to_str().unwrap().to_string(),
+            // file_name cannot fail as there must be a name
             Err(_) => name.file_name().unwrap().to_str().unwrap().to_string(),
         };
         let filter = plaintext.property("fxa").ok().map(|fxa_setting_plaintext| {
             Filter::try_from(fxa_setting_plaintext.unsecure_to_str().unwrap())
                 .expect("Unkown setting")
         });
-        LocalLogin {
+        Some(LocalLogin {
             password,
             username,
             url,
             filter,
-        }
+        })
     }
 
     fn to_login(self, online_logins: &Vec<Login>) -> Option<Login> {
@@ -134,32 +128,34 @@ async fn main() {
     let mut exclude = false;
     for secret in store.secret_iter() {
         let local_login = LocalLogin::new(&secret, &mut pass_context);
-        if let Some(filter) = &local_login.filter {
-            match filter {
-                Filter::Include => include = true,
-                Filter::Exclude => exclude = true,
+        if let Some(local_login) = local_login {
+            if let Some(filter) = &local_login.filter {
+                match filter {
+                    Filter::Include => include = true,
+                    Filter::Exclude => exclude = true,
+                }
             }
-        }
-        let mut current_is_cred = false;
-        if local_login.url.host_str().unwrap() == "firefox.com" {
-            current_is_cred = true;
-            firefox_credentials = Some(local_login.clone());
-            firefox_matches.push((secret.name, local_login.username.clone()));
-        } else if let Some(ref fxa_creds_name) = opt.fxa_creds_name {
-            if *fxa_creds_name == secret.name {
+            let mut current_is_cred = false;
+            if local_login.url.host_str().unwrap() == "firefox.com" {
                 current_is_cred = true;
                 firefox_credentials = Some(local_login.clone());
+                firefox_matches.push((secret.name, local_login.username.clone()));
+            } else if let Some(ref fxa_creds_name) = opt.fxa_creds_name {
+                if *fxa_creds_name == secret.name {
+                    current_is_cred = true;
+                    firefox_credentials = Some(local_login.clone());
+                }
             }
-        }
-        if current_is_cred {
-            if let Some(Filter::Include) = local_login.filter {
-            } else {
-                // The filter value is not include, so don't add it to local_logins by continuing
-                // the loop
-                continue;
+            if current_is_cred {
+                if let Some(Filter::Include) = local_login.filter {
+                } else {
+                    // The filter value is not include, so don't add it to local_logins by continuing
+                    // the loop
+                    continue;
+                }
             }
+            local_logins.push(local_login);
         }
-        local_logins.push(local_login);
     }
 
     match opt.fxa_creds_name {
