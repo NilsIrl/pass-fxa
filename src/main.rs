@@ -1,7 +1,7 @@
 use log::debug;
 use prs_lib::{crypto::IsContext, Plaintext, Secret, Store};
 use std::{convert::TryFrom, env::VarError, path::Path, process::exit};
-use structopt::StructOpt;
+use structopt::{clap::AppSettings, StructOpt};
 use url::Url;
 
 mod api;
@@ -104,7 +104,9 @@ fn get_store() -> Store {
 }
 
 #[derive(StructOpt)]
+#[structopt(author, about, global_settings(&[AppSettings::ColoredHelp]))]
 struct Opt {
+    /// Use the credentials at pass-name for FxA authentication
     #[structopt(name = "pass-name")]
     fxa_creds_name: Option<String>,
 }
