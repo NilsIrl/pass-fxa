@@ -1,6 +1,8 @@
 [package]
 name = "pass-fxa"
 description = "Upload a password-store to Firefox Accounts"
+categories = ["command-line-utilities"]
+keywords = ["pass", "passwordstore", "mozilla", "password-manager"]
 authors = ["Nils <nils@nilsand.re>"]
 license = "GPL-3.0-or-later"
 repository = "https://github.com/NilsIrl/pass-fxa/"

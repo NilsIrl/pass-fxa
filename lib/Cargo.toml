@@ -1,5 +1,11 @@
 [package]
 name = "pass-fxa-lib"
+description = "Library to interact with passwords stored on FxA"
+categories = ["authentication"]
+keywords = ["mozilla", "firefox", "password", "password-manager"]
+authors = ["Nils <nils@nilsand.re>"]
+license = "LGPL-3.0-or-later"
+repository = "https://github.com/NilsIrl/pass-fxa/"
 version = "0.1.0"
 edition = "2018"
 
