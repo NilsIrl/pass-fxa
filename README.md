@@ -1,6 +1,7 @@
 # pass-fxa
 
-A program that uses Firefox's builtin password manager with [zx2c4's pass][pass].
+A program that uses Firefox's builtin password manager with [zx2c4's
+pass][pass].
 
 It is meant to be use instead of other traditional browser extensions such as
 [passff] and [Browserpass][browserpass] with the following benefits:
@@ -14,6 +15,9 @@ It is meant to be use instead of other traditional browser extensions such as
 ## Installation
 
 ### Using pre-built binaries from the CI
+
+Linux, macOS and Windows binaries are available on the [release page]. These
+binaries are built by GitHub Actions CI.
 
 ### Using `cargo install`
 
@@ -80,5 +84,6 @@ Copyright © 2021 Nils André-Chang
 [crates.io]: https://crates.io/crates/mozwire
 [passff]: https://github.com/passff/passff
 [pass]: https://www.passwordstore.org/
+[release page]: https://github.com/NilsIrl/pass-fxa/releases
 
 [1]: https://github.com/passff/passff#multi-line-format
