@@ -37,7 +37,7 @@ impl LocalLogin {
         let plaintext = context
             .decrypt_file(&prs_lib_plaintext.path)
             .unwrap_or_else(|_| {
-                eprintln!("Failed to decrypt {}", prs_lib_plaintext.name);
+                eprintln!("\nFailed to decrypt {}", prs_lib_plaintext.name);
                 exit(1);
             });
         debug!("Decrypted {}", &prs_lib_plaintext.name);
