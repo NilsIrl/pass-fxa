@@ -747,16 +747,16 @@ impl SyncClient {
         let passwords_len = password_bsos.len();
         let mut password_bsos_enumerate = password_bsos.enumerate();
         let mut stdout = io::stdout();
-        print!("[0/{}] Downloading passwords", passwords_len);
+        eprint!("[0/{}] Downloading passwords", passwords_len);
         stdout.flush().unwrap();
         while let Some((i, password_bso)) = password_bsos_enumerate.next().await {
             if let PasswordBSORecord::Password(password) = password_bso {
                 passwords.push(password);
             }
-            print!("\r[{}/{}] Downloading passwords", i + 1, passwords_len);
+            eprint!("\r[{}/{}] Downloading passwords", i + 1, passwords_len);
             stdout.flush().unwrap();
         }
-        println!();
+        eprintln!();
         passwords
     }
 

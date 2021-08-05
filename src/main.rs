@@ -130,7 +130,11 @@ async fn main() {
     let mut local_logins = Vec::new();
     let mut include = false;
     let mut exclude = false;
-    for secret in store.secret_iter() {
+
+    let secrets = store.secrets(None);
+    let secrets_len = secrets.len();
+    eprint!("[0/{}] Local passwords processed", secrets_len);
+    for (i, secret) in secrets.into_iter().enumerate() {
         let local_login = LocalLogin::new(&secret, &mut pass_context);
         if let Some(local_login) = local_login {
             if let Some(filter) = &local_login.filter {
@@ -160,7 +164,9 @@ async fn main() {
             }
             local_logins.push(local_login);
         }
+        eprint!("\r[{}/{}] Local passwords processed", i + 1, secrets_len);
     }
+    eprintln!();
 
     match opt.fxa_creds_name {
         Some(_) => {
