@@ -9,15 +9,23 @@ use rsa::{hash::Hash, padding::PaddingScheme, PublicKeyParts, RSAPrivateKey};
 use secstr::SecUtf8;
 use serde::{de, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::io::{self, Write};
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+};
 use tokio::time::{sleep, Duration};
 use url::Url;
 
 const DURATION: u64 = 60;
+const BATCH_SIZE: usize = 100;
 
 #[derive(Deserialize)]
 struct CryptoKeyRecord {
     default: Vec<String>,
+}
+
+pub trait BsoObject {
+    fn id(&self) -> &str;
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -44,11 +52,29 @@ pub struct Login {
     time_used: Option<u64>,
 }
 
+impl BsoObject for Login {
+    fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Deleted {
+    id: String,
+    deleted: bool,
+}
+
+impl BsoObject for Deleted {
+    fn id(&self) -> &str {
+        &self.id
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 enum PasswordBSORecord {
     Password(Login),
-    Deleted { id: String, deleted: bool },
+    Deleted(Deleted),
 }
 
 fn generate_bso_id() -> String {
@@ -125,7 +151,7 @@ pub struct BSO {
 }
 
 impl BSO {
-    fn from_object(object: &Login, key: &[u8], hmac_key: &[u8]) -> Self {
+    fn from_object(object: &(impl BsoObject + Serialize), key: &[u8], hmac_key: &[u8]) -> Self {
         let iv = generate_iv();
         let cipher = Aes256Cbc::new_from_slices(key, &iv).unwrap();
         let mut payload = serde_json::to_vec(&object).unwrap();
@@ -137,7 +163,7 @@ impl BSO {
         mac.update(ciphertext_base64.as_bytes());
         //cipher.encrypt(buffer, pos)
         BSO {
-            id: object.id.to_string(),
+            id: object.id().to_string(),
             payload: Payload {
                 iv: base64::encode(iv),
                 ciphertext: ciphertext_base64,
@@ -621,31 +647,19 @@ impl FxaClient {
     }
 }
 
+#[derive(Deserialize)]
+struct BatchCollectionResponse {
+    success: Vec<String>,
+    // FIXME: These are individual attributes
+    failed: HashMap<String, String>,
+    batch: Option<String>,
+}
+
 impl SyncClient {
-    pub async fn get_storage_object<T>(&self, object: impl AsRef<str>) -> T
-    where
-        T: de::DeserializeOwned,
-    {
-        let mut request = self
-            .http_client
-            .get(format!("{}/storage/{}", self.api_endpoint, object.as_ref()))
-            .build()
-            .unwrap();
-        hawk_authenticate(&mut request, &self.sync_server_credentials);
-        let decrypted_payload = self
-            .http_client
-            .execute(request)
-            .await
-            .unwrap()
-            .json::<BSO>()
-            .await
-            .unwrap()
-            .decrypt_payload(&self.key_bundle[0..32], &self.key_bundle[32..64]);
-        serde_json::from_slice(&decrypted_payload).unwrap()
-    }
     pub async fn new(email: &str, password: &str) -> Self {
         FxaClient::new().get_sync_client(email, password).await
     }
+
     async fn from_sync_key_bundle(
         http_client: reqwest::Client,
         api_endpoint: String,
@@ -680,20 +694,46 @@ impl SyncClient {
         }
     }
 
-    pub async fn get_collection(&self, collection: &str) -> Vec<String> {
-        let mut request = self
-            .http_client
-            .get(format!("{}/storage/{}", self.api_endpoint, collection))
-            .build()
-            .unwrap();
+    async fn hawk_execute(
+        &self,
+        mut request: Request,
+    ) -> Result<reqwest::Response, reqwest::Error> {
         hawk_authenticate(&mut request, &self.sync_server_credentials);
-        self.http_client
-            .execute(request)
+        self.http_client.execute(request).await
+    }
+
+    pub async fn get_storage_object<T>(&self, object: impl AsRef<str>) -> T
+    where
+        T: de::DeserializeOwned,
+    {
+        let decrypted_payload = self
+            .hawk_execute(
+                self.http_client
+                    .get(format!("{}/storage/{}", self.api_endpoint, object.as_ref()))
+                    .build()
+                    .unwrap(),
+            )
             .await
             .unwrap()
-            .json()
+            .json::<BSO>()
             .await
             .unwrap()
+            .decrypt_payload(&self.key_bundle[0..32], &self.key_bundle[32..64]);
+        serde_json::from_slice(&decrypted_payload).unwrap()
+    }
+
+    pub async fn get_collection(&self, collection: &str) -> Vec<String> {
+        self.hawk_execute(
+            self.http_client
+                .get(format!("{}/storage/{}", self.api_endpoint, collection))
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap()
     }
 
     pub async fn get_logins(&self) -> Vec<Login> {
@@ -720,22 +760,92 @@ impl SyncClient {
         passwords
     }
 
-    pub async fn put_logins(&self, logins: &Vec<Login>) {
-        let mut request = self
-            .http_client
-            .post(format!("{}/storage/passwords", self.api_endpoint))
-            .json(
-                &logins
-                    .iter()
-                    .map(|login| {
-                        BSO::from_object(login, &self.key_bundle[0..32], &self.key_bundle[32..64])
-                    })
-                    .collect::<Vec<_>>(),
+    async fn post_collection(
+        &self,
+        objects: &[impl Serialize + BsoObject],
+        batch: Option<&str>,
+        commit: bool,
+    ) -> BatchCollectionResponse {
+        let mut query = Vec::new();
+        if commit {
+            query.push(("commit", "true"));
+        }
+        if let Some(batch) = batch {
+            query.push(("batch", batch));
+        }
+        self.hawk_execute(
+            self.http_client
+                .post(format!("{}/storage/passwords", self.api_endpoint))
+                .json(
+                    &objects
+                        .iter()
+                        .map(|login| {
+                            BSO::from_object(
+                                login,
+                                &self.key_bundle[0..32],
+                                &self.key_bundle[32..64],
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .query(&query)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap()
+    }
+
+    async fn upload_collection(&self, objects: &[impl BsoObject + Serialize]) {
+        if objects.len() > BATCH_SIZE {
+            let mut chunks = objects.chunks(BATCH_SIZE).enumerate();
+            let number_of_chunks = chunks.len();
+            let batch_id = self
+                .post_collection(chunks.next().unwrap().1, Some("true"), false)
+                .await
+                .batch
+                .unwrap();
+            for (i, chunk) in chunks {
+                let commit = i == number_of_chunks - 1;
+                // TODO deal with the failed BSOs, to retry them
+                self.post_collection(chunk, Some(&batch_id), commit).await;
+            }
+        } else {
+            self.post_collection(objects, None, false).await;
+        }
+    }
+
+    pub async fn put_logins(&self, logins: &[Login]) {
+        self.upload_collection(logins).await;
+    }
+
+    pub async fn delete_objects(self, ids: &[&str]) {
+        self.upload_collection(
+            &ids.iter()
+                .map(|id| Deleted {
+                    id: id.to_string(),
+                    deleted: true,
+                })
+                .collect::<Vec<_>>(),
+        )
+        .await;
+    }
+
+    pub async fn delete_ids(&self, collection: &str, ids: &[&str]) {
+        for chunk in ids.chunks(BATCH_SIZE) {
+            self.hawk_execute(
+                self.http_client
+                    .delete(format!("{}/storage/{}", self.api_endpoint, collection))
+                    .query(&[("ids", &chunk.join(","))])
+                    .build()
+                    .unwrap(),
             )
-            .build()
+            .await
             .unwrap();
-        hawk_authenticate(&mut request, &self.sync_server_credentials);
-        self.http_client.execute(request).await.unwrap();
+        }
     }
 }
 

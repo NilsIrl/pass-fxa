@@ -8,37 +8,28 @@ readme = "README.md"
 version = "0.1.0"
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[profile.release]
+lto = true
+codegen-units = 1
+
+[workspace]
+members = [
+    "helpers",
+]
 
 [dependencies]
+pass-fxa-lib = { version = "0.1.0", path = "lib" }
 
-aes = "0.7.4"
-block-modes = "0.8.1"
-pbkdf2 = { version = "0.8.0", default-features = false }
-hkdf = "0.11.0"
-hmac = "0.11.0"
-sha2 = "0.9.5"
-rsa = "0.4.0"
+tokio = { version = "1.8.2", default-features = false, features = ["rt", "macros"] }
 
-rand = "0.8.4"
-
-hawk = "3.2.1"
-
-tokio = { version = "1.8.2", features = ["rt", "macros"] }
-futures = "0.3.16"
-
+#prs-lib = { version = "0.2.14", default-features = false, features = ["backend-gpgme"] }
 prs-lib = "0.2.14"
-secstr = { version = "0.4.0", features = ["serde"] }
 
-reqwest = { version = "0.11.4", default-features = false, features = [ "json", "rustls-tls" ] }
 serde = { version = "1.0.126", features = [ "derive" ] }
-serde_json = "1.0.64"
-serde_with = { version = "1.9.4", default-features = false, features = [ "json" ] }
 
-url = { version = "2.2.2", features = ["serde"] }
-hex = "0.4.3"
-base64 = "0.13.0"
+url = { version = "2.2.2" }
 
 structopt = "0.3.22"
 log = "0.4.14"
 env_logger = "0.9.0"
+

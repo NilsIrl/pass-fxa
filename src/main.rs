@@ -4,9 +4,7 @@ use std::{convert::TryFrom, env::VarError, path::Path, process::exit};
 use structopt::{clap::AppSettings, StructOpt};
 use url::Url;
 
-mod api;
-
-use api::{Login, SyncClient};
+use pass_fxa_lib::{Login, SyncClient};
 
 #[derive(Clone)]
 enum Filter {
@@ -38,7 +36,11 @@ impl LocalLogin {
     fn new(prs_lib_plaintext: &Secret, context: &mut prs_lib::crypto::Context) -> Option<Self> {
         let plaintext = context
             .decrypt_file(&prs_lib_plaintext.path)
-            .expect("Failed to decrypt password file");
+            .unwrap_or_else(|_| {
+                eprintln!("Failed to decrypt {}", prs_lib_plaintext.name);
+                exit(1);
+            });
+        debug!("Decrypted {}", &prs_lib_plaintext.name);
 
         // TODO: what to do if no password
         let password = plaintext.first_line().unwrap();
