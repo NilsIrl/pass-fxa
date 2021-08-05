@@ -20,7 +20,7 @@ jobs:
     - run: cargo test --release
     - uses: actions/upload-artifact@v2
       with:
-        name: mozwire-${{ runner.os }}
+        name: pass-fxa-${{ runner.os }}
         path: target/release/pass-fxa.exe
   build-macos:
     runs-on: macos-latest
