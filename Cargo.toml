@@ -10,14 +10,19 @@ readme = "README.md"
 version = "0.1.0"
 edition = "2018"
 
-[profile.release]
-lto = true
-codegen-units = 1
+exclude = [
+    ".github",
+    "scripts"
+]
 
 [workspace]
 members = [
     "helpers",
 ]
+
+[profile.release]
+lto = true
+codegen-units = 1
 
 [dependencies]
 pass-fxa-lib = { version = "0.1.0", path = "lib" }
