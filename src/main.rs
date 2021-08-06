@@ -187,8 +187,8 @@ async fn main() {
 
     let secrets = store.secrets(None);
     let secrets_len = secrets.len();
-    eprint!("[0/{}] Local passwords processed", secrets_len);
     for (i, secret) in secrets.into_iter().enumerate() {
+        eprint!("\r[{}/{}] Local passwords processed", i, secrets_len);
         let local_login = LocalLogin::new(&secret, &mut pass_context);
         if let Some(local_login) = local_login {
             if let Some(filter) = &local_login.filter {
@@ -220,9 +220,11 @@ async fn main() {
             }
             local_logins.push(local_login);
         }
-        eprint!("\r[{}/{}] Local passwords processed", i + 1, secrets_len);
     }
-    eprintln!();
+    eprintln!(
+        "\r[{}/{}] Local passwords processed",
+        secrets_len, secrets_len
+    );
 
     match opt.pass_name {
         Some(_) => {
