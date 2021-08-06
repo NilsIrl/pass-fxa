@@ -88,7 +88,7 @@ under the GNU LESSER GENERAL PUBLIC LICENSE Version 3.
 Copyright © 2021 Nils André-Chang
 
 [browserpass]: https://github.com/browserpass/browserpass-extension
-[crates.io]: https://crates.io/crates/mozwire
+[crates.io]: https://crates.io/crates/pass-fxa
 [passff]: https://github.com/passff/passff
 [pass]: https://www.passwordstore.org/
 [release page]: https://github.com/NilsIrl/pass-fxa/releases
