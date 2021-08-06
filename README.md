@@ -6,7 +6,7 @@
 A program that uses Firefox's builtin password manager with [zx2c4's
 pass][pass].
 
-It is meant to be use instead of other traditional browser extensions such as
+It is meant to be used instead of other traditional browser extensions such as
 [passff] and [Browserpass][browserpass] with the following benefits:
 
 * More portable: there is no need to install native messaging host
