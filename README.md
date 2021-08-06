@@ -1,5 +1,8 @@
 # pass-fxa
 
+[![Crates.io](https://img.shields.io/crates/v/pass-fxa?label=pass-fxa)][crates.io]
+[![Crates.io](https://img.shields.io/crates/v/pass-fxa-lib?label=pass-fxa-lib)][crates.io-lib]
+
 A program that uses Firefox's builtin password manager with [zx2c4's
 pass][pass].
 
@@ -89,6 +92,7 @@ Copyright © 2021 Nils André-Chang
 
 [browserpass]: https://github.com/browserpass/browserpass-extension
 [crates.io]: https://crates.io/crates/pass-fxa
+[crates.io-lib]: https://crates.io/crates/pass-fxa-lib
 [passff]: https://github.com/passff/passff
 [pass]: https://www.passwordstore.org/
 [release page]: https://github.com/NilsIrl/pass-fxa/releases
