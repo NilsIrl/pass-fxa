@@ -7,7 +7,7 @@ use rand::{rngs::OsRng, RngCore};
 use reqwest::{header, Request, StatusCode};
 use rsa::{hash::Hash, padding::PaddingScheme, PublicKeyParts, RSAPrivateKey};
 use secstr::SecUtf8;
-use serde::{de, Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
@@ -28,10 +28,15 @@ pub trait BsoObject {
     fn id(&self) -> &str;
 }
 
+fn origin_serialize<S: Serializer>(hostname: &Url, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(&hostname.origin().ascii_serialization())
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Login {
     id: String,
+    #[serde(serialize_with = "origin_serialize")]
     pub hostname: Url,
     #[serde(rename = "formSubmitURL")]
     form_submit_url: String,
@@ -877,6 +882,22 @@ pub fn generate_iv() -> [u8; 16] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn serialize_origin_test() {
+        assert_eq!(
+            &serde_json::to_string(&Login {
+                id: "CZtAJxrSHbA0".to_string(),
+                ..Login::new(
+                    "username",
+                    "password",
+                    Url::parse("https://github.com").unwrap()
+                )
+            })
+            .unwrap(),
+            r#"{"id":"CZtAJxrSHbA0","hostname":"https://github.com","formSubmitURL":"","httpRealm":null,"username":"username","password":"password","usernameField":"","passwordField":""}"#
+        );
+    }
 
     // TODO: add test for only containing URL safe characters
     #[test]
