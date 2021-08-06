@@ -45,7 +45,14 @@ encrypted).
 If multiple records are available, it is possible to specify which to use:
 
 ```sh
-pass-fxa firefox.com/example@riseup.net
+pass-fxa --pass-name firefox.com/example@riseup.net
+```
+
+It is also possible to remove passwords from FxA if they are in your password
+store, effectively reverting the uploading operation:
+
+```sh
+pass-fxa [--pass-name <pass-name>] delete
 ```
 
 ### Store format
