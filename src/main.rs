@@ -4,7 +4,7 @@ use std::{convert::TryFrom, env::VarError, path::Path, process::exit};
 use structopt::{clap::AppSettings, StructOpt};
 use url::Url;
 
-use pass_fxa_lib::{Login, SyncClient};
+use pass_fxa_lib::{BsoObject, Login, SyncClient};
 
 #[derive(Clone)]
 enum Filter {
@@ -105,12 +105,66 @@ fn get_store() -> Store {
     .unwrap()
 }
 
+async fn upload(
+    sync_client: SyncClient,
+    exclude: bool,
+    include: bool,
+    local_logins: Vec<LocalLogin>,
+    remote_logins: Vec<Login>,
+) {
+    let logins_to_upload: Vec<_> = if exclude || include {
+        local_logins
+            .into_iter()
+            .filter(|login| include == login.filter.is_some())
+            .filter_map(|local_login| local_login.to_login(&remote_logins))
+            .collect()
+    } else {
+        local_logins
+            .into_iter()
+            .filter_map(|local_login| local_login.to_login(&remote_logins))
+            .collect()
+    };
+
+    println!("Uploading {} passwords.", logins_to_upload.len());
+    debug!("Passwords to upload: {:?}", logins_to_upload);
+    sync_client.put_logins(&logins_to_upload).await;
+}
+
+async fn delete(sync_client: SyncClient, local_logins: Vec<LocalLogin>, remote_logins: Vec<Login>) {
+    // IDs which have a matching username, password and URL
+    let logins_to_delete: Vec<_> = remote_logins
+        .iter()
+        .filter_map(|remote_login| {
+            local_logins
+                .iter()
+                .find(|local_login| {
+                    local_login.username == remote_login.username
+                        && local_login.password.unsecure_to_str().unwrap()
+                            == remote_login.password.unsecure()
+                        && local_login.url == remote_login.hostname
+                })
+                .map(|_| remote_login.id())
+        })
+        .collect();
+    println!("Deleting {} passwords.", logins_to_delete.len());
+    sync_client.delete_objects(&logins_to_delete).await;
+}
+
+#[derive(StructOpt)]
+enum Subcommand {
+    /// Delete all remote passwords that are present locally
+    Delete,
+}
+
 #[derive(StructOpt)]
 #[structopt(author, about, global_settings(&[AppSettings::ColoredHelp]))]
 struct Opt {
-    /// Use the credentials at pass-name for FxA authentication
-    #[structopt(name = "pass-name")]
-    fxa_creds_name: Option<String>,
+    /// Specify the credential location for FxA authentication
+    #[structopt(long)]
+    pass_name: Option<String>,
+
+    #[structopt(subcommand)]
+    subcommand: Option<Subcommand>,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -146,9 +200,11 @@ async fn main() {
             let mut current_is_cred = false;
             if local_login.url.host_str().unwrap() == "firefox.com" {
                 current_is_cred = true;
-                firefox_credentials = Some(local_login.clone());
+                if firefox_credentials.is_none() {
+                    firefox_credentials = Some(local_login.clone());
+                }
                 firefox_matches.push((secret.name, local_login.username.clone()));
-            } else if let Some(ref fxa_creds_name) = opt.fxa_creds_name {
+            } else if let Some(ref fxa_creds_name) = opt.pass_name {
                 if *fxa_creds_name == secret.name {
                     current_is_cred = true;
                     firefox_credentials = Some(local_login.clone());
@@ -168,7 +224,7 @@ async fn main() {
     }
     eprintln!();
 
-    match opt.fxa_creds_name {
+    match opt.pass_name {
         Some(_) => {
             if firefox_credentials.is_none() {
                 panic!("Could not find Firefox Account credentials.");
@@ -209,20 +265,10 @@ async fn main() {
 
     debug!("{:?}", remote_logins);
 
-    let logins_to_upload: Vec<_> = if exclude || include {
-        local_logins
-            .into_iter()
-            .filter(|login| include == login.filter.is_some())
-            .filter_map(|local_login| local_login.to_login(&remote_logins))
-            .collect()
-    } else {
-        local_logins
-            .into_iter()
-            .filter_map(|local_login| local_login.to_login(&remote_logins))
-            .collect()
-    };
-
-    println!("Uploading {} passwords.", logins_to_upload.len());
-    debug!("Passwords to upload: {:?}", logins_to_upload);
-    sync_client.put_logins(&logins_to_upload).await;
+    match opt.subcommand {
+        Some(subcommand) => match subcommand {
+            Subcommand::Delete => delete(sync_client, local_logins, remote_logins).await,
+        },
+        None => upload(sync_client, exclude, include, local_logins, remote_logins).await,
+    }
 }
