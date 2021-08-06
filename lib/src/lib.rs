@@ -127,11 +127,11 @@ struct AccountLoginRequest<'a, 'b, 'c> {
 }
 
 #[derive(Deserialize)]
-pub struct SyncServerToken {
-    pub id: String,
-    pub key: String,
+struct SyncServerToken {
+    id: String,
+    key: String,
     uid: u64,
-    pub api_endpoint: String,
+    api_endpoint: String,
     duration: u32,
     hashalg: String,
     hashed_fxa_uid: String,
@@ -139,16 +139,16 @@ pub struct SyncServerToken {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct Payload {
-    pub ciphertext: String,
+struct Payload {
+    ciphertext: String,
     #[serde(rename = "IV")]
-    pub iv: String,
-    pub hmac: String,
+    iv: String,
+    hmac: String,
 }
 
 type Aes256Cbc = Cbc<Aes256, Pkcs7>;
 #[derive(Deserialize, Serialize)]
-pub struct BSO {
+struct BSO {
     id: String,
     //modified: f64,
     #[serde(with = "serde_with::json::nested")]
@@ -220,21 +220,21 @@ impl<'a, 'b, 'c> AccountLoginRequest<'a, 'b, 'c> {
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct AccountLoginResponse {
+struct AccountLoginResponse {
     uid: String,
-    pub session_token: String,
-    pub key_fetch_token: String,
+    session_token: String,
+    key_fetch_token: String,
     verification_method: Option<String>,
     verified: bool,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct BadRequestError {
+struct BadRequestError {
     code: u16,
-    pub errno: u16,
-    pub message: String,
-    pub verification_method: Option<String>,
+    errno: u16,
+    message: String,
+    verification_method: Option<String>,
     verification_reason: Option<String>,
 }
 
@@ -244,7 +244,7 @@ struct SendUnblockCodeRequest<'a> {
 }
 
 #[derive(Serialize)]
-pub struct PublicKey<'a> {
+struct PublicKey<'a> {
     algorithm: &'a str,
     n: &'a str,
     e: &'a str,
@@ -258,13 +258,13 @@ struct CertificateSignRequest<'a> {
 }
 
 #[derive(Deserialize)]
-pub struct CertificateSignResponse {
-    pub cert: String,
+struct CertificateSignResponse {
+    cert: String,
 }
 
 #[derive(Deserialize)]
-pub struct AccountKeysResponse {
-    pub bundle: String,
+struct AccountKeysResponse {
+    bundle: String,
 }
 
 pub struct SyncClient {
@@ -274,12 +274,12 @@ pub struct SyncClient {
     key_bundle: [u8; 64],
 }
 
-pub struct FxaClient {
+struct FxaClient {
     client: reqwest::Client,
     base_uri: String,
 }
 
-pub enum Verification<'a> {
+enum Verification<'a> {
     EmailCaptcha(&'a str),
 }
 
@@ -311,7 +311,7 @@ fn hawk_authenticate(request: &mut Request, credentials: &hawk::Credentials) {
 }
 
 impl FxaClient {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             client: reqwest::Client::builder()
                 .user_agent("reqwest (pass-fxa)")
@@ -325,7 +325,7 @@ impl FxaClient {
     }
 
     // TODO: move this crypto stuff somewhere else
-    pub async fn get_sync_client(self, email: &str, password: &str) -> SyncClient {
+    async fn get_sync_client(self, email: &str, password: &str) -> SyncClient {
         let email_salt = kwe("quickStretch", email);
         let mut quick_stretched_pw = [0u8; 32];
         pbkdf2::pbkdf2::<Hmac<Sha256>>(
@@ -470,7 +470,7 @@ impl FxaClient {
         .await
     }
 
-    pub async fn account_login(
+    async fn account_login(
         &self,
         email: &str,
         auth_pw: &str,
@@ -490,7 +490,7 @@ impl FxaClient {
         }
     }
 
-    pub async fn account_login_send_unblock_code(&self, email: &str) {
+    async fn account_login_send_unblock_code(&self, email: &str) {
         let response = self
             .client
             .post(format!("{}/account/login/send_unblock_code", self.base_uri))
@@ -513,7 +513,7 @@ impl FxaClient {
         }
     }
 
-    pub async fn account_keys(
+    async fn account_keys(
         &self,
         credentials: &hawk::Credentials,
     ) -> Result<AccountKeysResponse, reqwest::Error> {
@@ -526,7 +526,7 @@ impl FxaClient {
         self.client.execute(request).await.unwrap().json().await
     }
 
-    pub async fn certificate_sign(
+    async fn certificate_sign(
         &self,
         n: &str,
         e: &str,
@@ -561,7 +561,7 @@ impl FxaClient {
         (response.json().await.unwrap(), server_time)
     }
 
-    pub async fn sync_server_tokens(
+    async fn sync_server_tokens(
         &self,
         client_state: &str,
         browserid_assertion: &str,
@@ -581,11 +581,7 @@ impl FxaClient {
             .unwrap()
     }
 
-    pub async fn _info_collections(
-        &self,
-        sync_server_endpoint: &str,
-        credentials: &hawk::Credentials,
-    ) {
+    async fn _info_collections(&self, sync_server_endpoint: &str, credentials: &hawk::Credentials) {
         let mut request = self
             .client
             .get(format!("{}/info/collections", sync_server_endpoint))
@@ -594,7 +590,8 @@ impl FxaClient {
         hawk_authenticate(&mut request, credentials);
         self.client.execute(request).await.unwrap();
     }
-    pub async fn get_browserid_assertion(&self, session_token: &str) -> String {
+
+    async fn get_browserid_assertion(&self, session_token: &str) -> String {
         let mut derived_from_session_token = [0u8; 64];
         println!("Generating RSA Private Key. This may take a while.");
         let rsa_private_key = RSAPrivateKey::new(&mut OsRng, 2048).unwrap();
@@ -707,7 +704,7 @@ impl SyncClient {
         self.http_client.execute(request).await
     }
 
-    pub async fn get_storage_object<T>(&self, object: impl AsRef<str>) -> T
+    async fn get_storage_object<T>(&self, object: impl AsRef<str>) -> T
     where
         T: de::DeserializeOwned,
     {
@@ -854,17 +851,17 @@ impl SyncClient {
     }
 }
 
-pub fn xor(a: &mut [u8], b: &[u8]) {
+fn xor(a: &mut [u8], b: &[u8]) {
     for (x, y) in a.iter_mut().zip(b.iter()) {
         *x ^= *y;
     }
 }
 
-pub fn kwe(name: &str, email: &str) -> String {
+fn kwe(name: &str, email: &str) -> String {
     format!("{}:{}", kw(name), email)
 }
 
-pub fn kw(name: &str) -> String {
+fn kw(name: &str) -> String {
     format!("identity.mozilla.com/picl/v1/{}", name)
 }
 
@@ -874,7 +871,7 @@ struct Assertion<'a> {
     aud: &'a str,
 }
 
-pub fn generate_iv() -> [u8; 16] {
+fn generate_iv() -> [u8; 16] {
     let mut iv = [0u8; 16];
     OsRng.fill_bytes(&mut iv);
     return iv;
