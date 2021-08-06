@@ -82,6 +82,11 @@ email
     robert
 ```
 
+Records can be explicitly excluded from being uploaded by adding the line `fxa:
+exclude` to a password file. It is also possible to only upload some passwords
+by adding the line `fxa: include`. Passwords that have as host `firefox.com`
+are excluded by default.
+
 ## License and Copyright
 
 `pass-fxa` is licensed under the GNU GENERAL PUBLIC LICENSE Version 3 and the
