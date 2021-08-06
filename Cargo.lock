@@ -802,7 +802,7 @@ dependencies = [
 
 [[package]]
 name = "pass-fxa"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "env_logger",
  "log",
@@ -816,7 +816,7 @@ dependencies = [
 
 [[package]]
 name = "pass-fxa-lib"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "aes",
  "base64 0.13.0",
