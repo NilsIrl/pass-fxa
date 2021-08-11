@@ -6,6 +6,9 @@ use url::Url;
 
 use pass_fxa_lib::{BsoObject, Login, SyncClient};
 
+const PROPERTY_USER_NAMES: &[&str] = &["login", "username", "user"];
+const PROPERTY_URL_NAMES: &[&str] = &["url", "uri", "website", "site", "link", "launch"];
+
 #[derive(Clone)]
 enum Filter {
     Exclude,
@@ -47,19 +50,19 @@ impl LocalLogin {
 
         // This is fine to perform as it costs nothing to create a Path
         let name = Path::new(&prs_lib_plaintext.name);
-        let url = match plaintext.property("url") {
-            Err(_) => Url::parse(&format!(
+        let url = match plaintext_property_any(&plaintext, PROPERTY_URL_NAMES) {
+            None => Url::parse(&format!(
                 "https://{}",
                 name.parent().unwrap().file_name()?.to_str().unwrap(),
             ))
             .unwrap(),
-            Ok(url_plaintext) => Url::parse(url_plaintext.unsecure_to_str().unwrap()).unwrap(),
+            Some(url_plaintext) => Url::parse(url_plaintext.unsecure_to_str().unwrap()).unwrap(),
         };
 
-        let username = match plaintext.property("login") {
-            Ok(login_plaintext) => login_plaintext.unsecure_to_str().unwrap().to_string(),
+        let username = match plaintext_property_any(&plaintext, PROPERTY_USER_NAMES) {
+            Some(login_plaintext) => login_plaintext.unsecure_to_str().unwrap().to_string(),
             // file_name cannot fail as there must be a name
-            Err(_) => name.file_name().unwrap().to_str().unwrap().to_string(),
+            None => name.file_name().unwrap().to_str().unwrap().to_string(),
         };
         let filter = plaintext.property("fxa").ok().map(|fxa_setting_plaintext| {
             Filter::try_from(fxa_setting_plaintext.unsecure_to_str().unwrap())
@@ -103,6 +106,13 @@ fn get_store() -> Store {
         Err(VarError::NotUnicode(path)) => panic!("`{:?}` is not unicode.", path),
     }
     .unwrap()
+}
+
+/// Get a property from plaintext by name, in `names` order.
+fn plaintext_property_any(plaintext: &Plaintext, names: &[&str]) -> Option<Plaintext> {
+    names
+        .into_iter()
+        .find_map(|name| plaintext.property(name).ok())
 }
 
 async fn upload(
