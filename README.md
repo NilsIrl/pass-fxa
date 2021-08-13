@@ -62,7 +62,8 @@ pass-fxa [--pass-name <pass-name>] delete
 
 The URL & username can be obtained in 2 different ways:
 
-1. [As fields in each file][1]
+1. [As fields in each file][1] `login`, `username`, `user` for the username and
+   `url`, `uri`, `website`, `site`, `link` and `launch` for the URL.
 2. From the filepath, with the containing folder being the domain and the
    filename the username
 
