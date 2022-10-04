@@ -135,8 +135,17 @@ async fn upload(
             .collect()
     };
 
-    println!("Uploading {} passwords.", logins_to_upload.len());
+    let mut output = format!("Uploading {} passwords.", logins_to_upload.len());
+    for login_to_upload in logins_to_upload.iter() {
+        output.push_str("\n- ");
+        output.push_str(&login_to_upload.username);
+        output.push('@');
+        output.push_str(login_to_upload.hostname.domain().unwrap());
+    }
+    println!("{}", output);
+
     debug!("Passwords to upload: {:?}", logins_to_upload);
+
     sync_client.put_logins(&logins_to_upload).await;
 }
 

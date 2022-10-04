@@ -43,7 +43,9 @@ pub struct Login {
     http_realm: Option<String>,
     pub username: String,
     pub password: SecUtf8,
+    // HTML tag id of the username field
     username_field: String,
+    // HTML tag id of the password field
     password_field: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     time_last_used: Option<u64>,
@@ -377,7 +379,10 @@ impl FxaClient {
                         // Cannot have "Invalid unblock code" when no unblock code is given
                         unreachable!();
                     }
-                    _ => unimplemented!(),
+                    _ => {
+                        dbg!(bad_request_error);
+                        unimplemented!();
+                    }
                 }
             }
         };
