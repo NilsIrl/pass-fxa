@@ -495,6 +495,8 @@ impl FxaClient {
         }
     }
 
+    // TODO no error handling. It is not possible to capture error from the calling code, as this
+    // panics.
     async fn account_login_send_unblock_code(&self, email: &str) {
         let response = self
             .client
@@ -514,7 +516,12 @@ impl FxaClient {
                 // TODO proper exit
                 panic!("TODO proper ending of stuff");
             }
-            _ => unimplemented!(),
+            StatusCode::BAD_REQUEST => {}
+            _ => {
+                dbg!(&response);
+                dbg!(response.bytes().await.unwrap());
+                unimplemented!("An unexpected error occured.");
+            }
         }
     }
 
