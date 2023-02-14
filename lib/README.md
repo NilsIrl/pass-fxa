@@ -8,4 +8,4 @@ securely on FxA.
 `pass-fxa-lib` is licensed under the GNU LESSER GENERAL PUBLIC LICENSE Version
 3.
 
-Copyright © 2021-2022 Nils André-Chang
+Copyright © 2021-2023 Nils André-Chang

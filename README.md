@@ -94,7 +94,7 @@ are excluded by default.
 underlying library for communication with FxA, `pass-fxa-lib`, is licensed
 under the GNU LESSER GENERAL PUBLIC LICENSE Version 3.
 
-Copyright © 2021-2022 Nils André-Chang
+Copyright © 2021-2023 Nils André-Chang
 
 [browserpass]: https://github.com/browserpass/browserpass-extension
 [crates.io]: https://crates.io/crates/pass-fxa
