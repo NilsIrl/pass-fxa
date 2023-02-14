@@ -27,7 +27,7 @@ codegen-units = 1
 [dependencies]
 pass-fxa-lib = { version = "0.4.0", path = "lib" }
 
-tokio = { version = "1.23.1", default-features = false, features = ["rt", "macros"] }
+tokio = { version = "1.25.0", default-features = false, features = ["rt", "macros"] }
 
 #prs-lib = { version = "0.2.14", default-features = false, features = ["backend-gpgme"] }
 prs-lib = "0.2.14"
